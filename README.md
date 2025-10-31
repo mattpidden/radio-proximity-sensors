@@ -35,3 +35,8 @@ B) Receiver in management vehicle
 - 2 × Waveshare RP2040-LoRa-HF Development Kit (SX1262)
 - 2 × Buzzers or small speakers
 - 2 × USB power sources (e.g. power banks)
+
+Future hardware
+- 2 x 12v to 5v DC-DC buck converters
+- 2 x magnetic hi range antennas
+ 
