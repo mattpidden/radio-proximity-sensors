@@ -14,6 +14,20 @@
 // Initialize the SX1262 module using SPI1 instance
 SX1262 radio = new Module(LORA_SS, LORA_DIO1, LORA_RST, LORA_BUSY, SPI1);
 
+enum Mode {
+  NONE,
+  GREEN,
+  YELLOW,
+  RED
+};
+Mode currentMode = NONE;
+String deviceId = "RACPIDDEN";
+unsigned long lastRxTime = 0;
+const long rxInterval = 30000;
+long beepPeriodMs = 0;
+static unsigned long lastBeepTime = 0;
+
+
 // --- State Variables ---
 // Flag to indicate reception finished (set by interrupt)
 volatile bool operationDone = false;
@@ -63,10 +77,53 @@ void setup() {
     Serial.println(state);
     while (true) { delay(10); }
   }
+  pinMode(9, OUTPUT); // green led
+  pinMode(6, OUTPUT); // yellow led
+  pinMode(3, OUTPUT); // red led
+  pinMode(5, OUTPUT); // buzzer
+}
+
+void updateLEDs(){
+  switch (currentMode) {
+    case NONE:
+      digitalWrite(9, LOW);
+      digitalWrite(6, LOW);
+      digitalWrite(3, LOW);
+      break;
+    case GREEN:
+      digitalWrite(9, HIGH);
+      digitalWrite(6, LOW);
+      digitalWrite(3, LOW);
+      break;
+
+    case YELLOW:
+      digitalWrite(9, LOW);
+      digitalWrite(6, HIGH);
+      digitalWrite(3, LOW);
+      break;
+
+    case RED:
+      digitalWrite(9, LOW);
+      digitalWrite(6, LOW);
+      digitalWrite(3, HIGH);
+      break;
+  }
 }
 
 void loop() {
   // Check if the previous reception finished
+  updateLEDs();
+
+  if (currentMode != NONE) {
+    if (millis() - lastBeepTime >= beepPeriodMs) {
+      lastBeepTime = millis();
+      tone(5, 1000);   // 1kHz beep
+      delay(100);      // beep length
+      noTone(5);
+      Serial.println("BEEPED");
+    }
+  }
+
   if(operationDone) {
     // Reset flag immediately
     operationDone = false;
@@ -76,32 +133,50 @@ void loop() {
     int state = radio.readData(str);
 
     if (state == RADIOLIB_ERR_NONE) {
-      // Packet was successfully received
-      Serial.println(F("\n--- Packet Received ---"));
+      if (str.indexOf(deviceId) != -1) {
+        lastRxTime = millis();
+        int dashIndex = str.indexOf('-');
+        if (dashIndex != -1 && dashIndex + 1 < str.length()) {
+          char c = str.charAt(dashIndex + 1);
+          if (c == 'G') currentMode = GREEN;
+          else if (c == 'Y') currentMode = YELLOW;
+          else if (c == 'R') currentMode = RED;
+        }
 
-      // print data of the packet
-      Serial.print(F("Data:\t\t"));
-      Serial.println(str);
+        // Packet was successfully received
+        Serial.println(F("\n--- Packet Received ---"));
 
-      // print RSSI (Received Signal Strength Indicator)
-      Serial.print(F("RSSI:\t\t"));
-      Serial.print(radio.getRSSI());
-      Serial.println(F(" dBm"));
+        // print data of the packet
+        Serial.print(F("Data:\t\t"));
+        Serial.println(str);
 
-      // print SNR (Signal-to-Noise Ratio)
-      Serial.print(F("SNR:\t\t"));
-      Serial.print(radio.getSNR());
-      Serial.println(F(" dB"));
+        // print data of the packet
+        Serial.print(F("Mode:\t\t"));
+        if (currentMode == GREEN) Serial.println("GREEN");
+        else if (currentMode == YELLOW) Serial.println("YELLOW");
+        else if (currentMode == RED) Serial.println("RED");
+        else if (currentMode == NONE) Serial.println("NONE");
 
-      float constrainedRssi = constrain(radio.getRSSI(), -140.0, -60.0);
-      long beepPeriodMs = (long)((-1000.0 * (constrainedRssi + 50.0)) / 8.0);
-      // print beep period in Ms
-      Serial.print(F("BP:\t\t"));
-      Serial.print(beepPeriodMs/1000);
-      Serial.println(F(" s"));
+        // print RSSI (Received Signal Strength Indicator)
+        Serial.print(F("RSSI:\t\t"));
+        Serial.print(radio.getRSSI());
+        Serial.println(F(" dBm"));
 
-     
-      Serial.println(F("-----------------------"));
+        // print SNR (Signal-to-Noise Ratio)
+        Serial.print(F("SNR:\t\t"));
+        Serial.print(radio.getSNR());
+        Serial.println(F(" dB"));
+
+        float constrainedRssi = constrain(radio.getRSSI(), -140.0, -60.0);
+        beepPeriodMs = (long)((-1000.0 * (constrainedRssi + 50.0)) / 16.0);
+        // print beep period in Ms
+        Serial.print(F("BP:\t\t"));
+        Serial.print(beepPeriodMs/1000);
+        Serial.println(F(" s"));
+
+      
+        Serial.println(F("-----------------------"));
+      }
     } else if (state == RADIOLIB_ERR_CRC_MISMATCH) {
       // CRC was wrong, but packet was received
       Serial.println(F("[RX] Warning: CRC mismatch! (Data corrupted)"));
@@ -119,5 +194,9 @@ void loop() {
       Serial.print(F("[RX] Failed to restart listening, code "));
       Serial.println(restartState);
     }
+  }
+
+  if(millis() - lastRxTime >= rxInterval) {
+    currentMode = NONE;
   }
 }
