@@ -23,10 +23,11 @@ enum Mode {
 Mode currentMode = NONE;
 String deviceId = "RACPIDDEN";
 unsigned long lastRxTime = 0;
-const long rxInterval = 30000;
+const long rxInterval = 60000;
 long beepPeriodMs = 0;
 static unsigned long lastBeepTime = 0;
-
+static bool buzzerOn = false;
+static unsigned long buzzerChangeTime = 0;
 
 // --- State Variables ---
 // Flag to indicate reception finished (set by interrupt)
@@ -110,18 +111,34 @@ void updateLEDs(){
   }
 }
 
+
+
 void loop() {
   // Check if the previous reception finished
   updateLEDs();
 
   if (currentMode != NONE) {
-    if (millis() - lastBeepTime >= beepPeriodMs) {
-      lastBeepTime = millis();
-      tone(5, 1000);   // 1kHz beep
-      delay(100);      // beep length
-      noTone(5);
-      Serial.println("BEEPED");
+    const unsigned long BEEP_DURATION_MS = 100;
+    unsigned long now = millis();
+    if (buzzerOn) {
+      if (now - buzzerChangeTime >= BEEP_DURATION_MS) {
+        noTone(5);
+        buzzerOn = false;
+        buzzerChangeTime = now; // Mark time buzzer turned OFF
+      }
     }
+    else { // buzzerOn is false (buzzer is OFF)
+      // Check if the silent interval (beepPeriodMs) since the last time the buzzer turned OFF (buzzerChangeTime) has passed.
+      if (now - buzzerChangeTime >= beepPeriodMs) {
+        tone(5, 1000);
+        buzzerOn = true;
+        buzzerChangeTime = now; // Mark time buzzer turned ON
+        // We only need buzzerChangeTime for the turn-off check, lastBeepTime is not necessary anymore
+        // since the logic is driven by the state (buzzerOn) and buzzerChangeTime.
+      }
+    }
+  } else {
+    noTone(5);
   }
 
   if(operationDone) {
@@ -168,7 +185,8 @@ void loop() {
         Serial.println(F(" dB"));
 
         float constrainedRssi = constrain(radio.getRSSI(), -140.0, -60.0);
-        beepPeriodMs = (long)((-1000.0 * (constrainedRssi + 50.0)) / 16.0);
+        float norm = (constrainedRssi + 59.9999) / -80.0; // 0 = -60dBm, 1 = -140dBm
+        beepPeriodMs = pow(norm, 2.5) * 5000;
         // print beep period in Ms
         Serial.print(F("BP:\t\t"));
         Serial.print(beepPeriodMs/1000);
