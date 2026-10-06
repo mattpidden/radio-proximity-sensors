@@ -1,7 +1,7 @@
 #include <RadioLib.h>
 #include <SPI.h>
 
-// --- Hardware Pin Definitions (From original code) ---
+// --- LoRa Pin Definitions (Waveshare RP2040-LoRa-HF) ---
 #define LORA_SCK     14
 #define LORA_MISO    24
 #define LORA_MOSI    15
@@ -10,6 +10,13 @@
 #define LORA_DIO1    16
 #define LORA_BUSY    18
 #define LORA_ANT_SW  17 // Not used for this module instantiation
+
+// --- Front Panel Pin Definitions ---
+#define GREEN_LED     9
+#define YELLOW_LED    6
+#define RED_LED       3
+#define YELLOW_BUTTON 5
+#define RED_BUTTON    4
 
 // Initialize the SX1262 module using SPI1 instance
 SX1262 radio = new Module(LORA_SS, LORA_DIO1, LORA_RST, LORA_BUSY, SPI1);
@@ -53,13 +60,13 @@ void setup() {
   Serial.begin(9600);
   delay(2000);
 
-  // --- SPI Initialization (From original code) ---
+  // --- SPI Initialization ---
   SPI1.setRX(LORA_MISO);
   SPI1.setTX(LORA_MOSI);
   SPI1.setSCK(LORA_SCK);
   SPI1.begin();
 
-  // --- Radio Initialization (From original code) ---
+  // --- Radio Initialization ---
   Serial.print(F("[TX] Initializing SX1262 ... "));
   // radio.begin(Freq, BW, SF, CR, SyncWord, Power, PreambleLen, AmplifierGain)
   int state = radio.begin(868.0, 125.0, 12, 5, RADIOLIB_SX126X_SYNC_WORD_PRIVATE, 17, 14, 0);
@@ -74,38 +81,38 @@ void setup() {
 
   // Set the function that will be called when packet is transmitted
   radio.setDio1Action(setFlag);
-  pinMode(9, OUTPUT); // green led
-  pinMode(6, OUTPUT); // yellow led
-  pinMode(3, OUTPUT); // red led
-  pinMode(5, INPUT_PULLUP); // yellow button
-  pinMode(4, INPUT_PULLUP); // red button
+  pinMode(GREEN_LED, OUTPUT);
+  pinMode(YELLOW_LED, OUTPUT);
+  pinMode(RED_LED, OUTPUT);
+  pinMode(YELLOW_BUTTON, INPUT_PULLUP);
+  pinMode(RED_BUTTON, INPUT_PULLUP);
 }
 
 void updateLEDs(){
   switch (currentMode) {
     case GREEN:
-      digitalWrite(9, HIGH);
-      digitalWrite(6, LOW);
-      digitalWrite(3, LOW);
+      digitalWrite(GREEN_LED, HIGH);
+      digitalWrite(YELLOW_LED, LOW);
+      digitalWrite(RED_LED, LOW);
       break;
 
     case YELLOW:
-      digitalWrite(9, LOW);
-      digitalWrite(6, HIGH);
-      digitalWrite(3, LOW);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(YELLOW_LED, HIGH);
+      digitalWrite(RED_LED, LOW);
       break;
 
     case RED:
-      digitalWrite(9, LOW);
-      digitalWrite(6, LOW);
-      digitalWrite(3, HIGH);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(YELLOW_LED, LOW);
+      digitalWrite(RED_LED, HIGH);
       break;
   }
 }
 
 void loop() {
   updateLEDs();
-  int currentYellowState = digitalRead(5);
+  int currentYellowState = digitalRead(YELLOW_BUTTON);
   if (currentYellowState == LOW) {
     if (yellowPressTime == 0) yellowPressTime = millis();
     if (!yellowHeld && millis() - yellowPressTime > holdThreshold) {
@@ -118,7 +125,7 @@ void loop() {
     yellowHeld = false;
   }
 
-  int currentRedState = digitalRead(4);
+  int currentRedState = digitalRead(RED_BUTTON);
   if (currentRedState == LOW) {
     if (redPressTime == 0) redPressTime = millis();
     if (!redHeld && millis() - redPressTime > holdThreshold) {
@@ -140,7 +147,7 @@ void loop() {
     if (transmissionState == RADIOLIB_ERR_NONE) {
       Serial.println(F(" Transmission finished successfully."));
     } else {
-      Serial.print(F("w Transmission failed, code "));
+      Serial.print(F(" Transmission failed, code "));
       Serial.println(transmissionState);
     }
   }
